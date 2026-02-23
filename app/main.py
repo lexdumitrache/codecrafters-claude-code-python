@@ -27,40 +27,17 @@ def main():
                 "name": "Read",
                 "description": "Read and return the contents of a file",
                 "parameters": {
-                "type": "object",
-                "properties": {
-                    "file_path": {
-                    "type": "string",
-                    "description": "The path to the file to read"
-                    }
-                },
-                "required": ["file_path"]
-                }
-            }
-            }
-        ],
-        tools_choice=[{
-        "choices": [
-            {
-            "index": 0,
-            "message": {
-                "role": "assistant",
-                "content": None,
-                "tool_calls": [
-                {
-                    "id": "call_abc123",
-                    "type": "function",
-                    "function": {
-                    "name": "Read",
-                    "arguments": "{\"file_path\": \"/path/to/file.txt\"}"
+                    "type": "object",
+                    "properties": {
+                        "file_path": {
+                            "type": "string",
+                            "description": "The path to the file to read"
+                            }
+                        },
+                    "required": ["file_path"]
                     }
                 }
-                ]
-            },
-            "finish_reason": "tool_calls"
             }
-        ]
-        }
         ],
     )
 
@@ -70,10 +47,36 @@ def main():
     # You can use print statements as follows for debugging, they'll be visible when running tests.
     print("Logs from your program will appear here!", file=sys.stderr)
 
-    # TODO: Uncomment the following line to pass the first stage
     message = chat.choices[0].message
-    if message.tool_calls:
+
+    # Tool-call path
+    if getattr(message, "tool_calls", None):
         tool_call = message.tool_calls[0]
+        fn_name = tool_call.function.name
+
+        if fn_name != "Read":
+            raise RuntimeError(f"Unsupported tool call: {fn_name}")
+
+        try:
+            args_obj = json.loads(tool_call.function.arguments or "{}")
+        except json.JSONDecodeError as e:
+            raise RuntimeError(f"Invalid tool arguments JSON: {e}")
+
+        file_path = args_obj.get("file_path")
+        if not file_path:
+            raise RuntimeError("Missing required argument: file_path")
+
+        with open(file_path, "r", encoding="utf-8") as f:
+            sys.stdout.write(f.read())
+        return
+
+    # Normal content path
+    if message.content:
+        sys.stdout.write(message.content)
+        return
+
+    # If neither tool_calls nor content exists
+    raise RuntimeError("No tool_calls or content in response")
 
 
 if __name__ == "__main__":
