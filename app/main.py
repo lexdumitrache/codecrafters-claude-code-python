@@ -39,13 +39,13 @@ def main():
             }
             }
         ],
-        tools_calls=[{
+        tools_choices=[{
         "choices": [
             {
             "index": 0,
             "message": {
                 "role": "assistant",
-                "content": null,
+                "content": None,
                 "tool_calls": [
                 {
                     "id": "call_abc123",
