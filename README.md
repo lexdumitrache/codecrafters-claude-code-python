@@ -1,34 +1,81 @@
 [![progress-banner](https://backend.codecrafters.io/progress/claude-code/d3d3965a-90d4-4ef3-b6fd-0e770d78abbe)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
 
-This is a starting point for Python solutions to the
-["Build Your own Claude Code" Challenge](https://codecrafters.io/challenges/claude-code).
+# Claude Code — LLM-Powered Coding Assistant (Python)
 
-Claude Code is an AI coding assistant that uses Large Language Models (LLMs) to
-understand code and perform actions through tool calls. In this challenge,
-you'll build your own Claude Code from scratch by implementing an LLM-powered
-coding assistant.
+This repository contains **my implementation of a simplified “Claude Code”**, an AI-powered coding assistant built from scratch in Python as part of the  
+[Build Your Own Claude Code challenge by CodeCrafters](https://codecrafters.io/challenges/claude-code).
 
-Along the way you'll learn about HTTP RESTful APIs, OpenAI-compatible tool
-calling, agent loop, and how to integrate multiple tools into an AI assistant.
+The project focuses on designing a **tool-calling LLM agent** capable of reasoning, executing actions, and completing multi-step tasks through an agent loop.
 
-**Note**: If you're viewing this repo on GitHub, head over to
-[codecrafters.io](https://codecrafters.io) to try the challenge.
+---
 
-# Passing the first stage
+## 🧠 What this project does
 
-The entry point for your `claude-code` implementation is in `app/main.py`. Study
-and uncomment the relevant code, and submit to pass the first stage:
+The assistant communicates with a Large Language Model (LLM) using an **OpenAI-compatible API** (via OpenRouter) and supports multiple tools that allow it to interact with the local environment.
 
-```sh
-codecrafters submit
+Implemented tools include:
+
+- **Read** — read the contents of files  
+- **Write** — create or overwrite files  
+- **Bash** — execute shell commands  
+
+The model decides when and how to use these tools, while the program executes them deterministically and feeds results back into the conversation.
+
+---
+
+## 🔁 Agent Loop
+
+A key part of the implementation is the **agent loop**, which enables multi-step reasoning:
+
+1. The user provides a prompt
+2. The model responds, optionally requesting one or more tool calls
+3. Requested tools are executed by the program
+4. Tool results are appended to the conversation
+5. The loop repeats until the model produces a final response
+
+This allows the assistant to solve tasks such as:
+
+- Reading instructions from a file and acting on them
+- Creating or modifying files based on context
+- Cleaning up or manipulating project files via shell commands
+
+---
+
+## 🏗️ Architecture
+
+- **Language:** Python  
+- **API:** OpenAI-compatible (OpenRouter)  
+- **Core concepts implemented:**
+  - Tool calling schema
+  - Persistent conversation state
+  - Multi-step agent loop
+  - Deterministic execution of side effects
+  - Clean separation between reasoning and execution
+
+The main entry point is in `app/main.py`. All logic — prompt handling, tool execution, and the agent loop — is implemented there.
+
+---
+
+## 🚀 How to run
+
+### Prerequisites
+- Python 3.10+
+- An OpenRouter API key
+
+Set the required environment variables:
+
+```bash
+export OPENROUTER_API_KEY="your_api_key"
+export OPENROUTER_BASE_URL="https://openrouter.ai/api/v1"
+```
+Run the assistant:
+
+```bash
+./your_program.sh -p "Your prompt here"
 ```
 
-# Stage 2 & beyond
+Example:
 
-Note: This section is for stages 2 and beyond.
-
-1. Ensure you have `uv` installed locally.
-2. Run `./your_program.sh` to run your program, which is implemented in
-   `app/main.py`.
-3. Run `codecrafters submit` to submit your solution to CodeCrafters. Test
-   output will be streamed to your terminal.
+```bash
+./your_program.sh -p "Delete the old readme file. Always respond with 'Deleted README_old.md'"
+```
