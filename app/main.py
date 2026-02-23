@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 import json
+import subprocess
 
 from openai import OpenAI
 
@@ -9,8 +10,7 @@ from openai import OpenAI
 API_KEY = os.getenv("OPENROUTER_API_KEY")
 BASE_URL = os.getenv("OPENROUTER_BASE_URL", default="https://openrouter.ai/api/v1")
 
-# Advertise BOTH tools: Read + Write.
-# The model can decide which ones to call and in what order.
+# Advertise tools: Read + Write + Bash.
 TOOLS = [
     {
         "type": "function",
@@ -20,10 +20,7 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "The path to the file to read",
-                    }
+                    "file_path": {"type": "string", "description": "The path to the file to read"}
                 },
                 "required": ["file_path"],
             },
@@ -38,14 +35,22 @@ TOOLS = [
                 "type": "object",
                 "required": ["file_path", "content"],
                 "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "The path of the file to write to",
-                    },
-                    "content": {
-                        "type": "string",
-                        "description": "The content to write to the file",
-                    },
+                    "file_path": {"type": "string", "description": "The path of the file to write to"},
+                    "content": {"type": "string", "description": "The content to write to the file"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "Bash",
+            "description": "Execute a shell command",
+            "parameters": {
+                "type": "object",
+                "required": ["command"],
+                "properties": {
+                    "command": {"type": "string", "description": "The command to execute"},
                 },
             },
         },
@@ -54,21 +59,13 @@ TOOLS = [
 
 
 def tool_read(file_path: str) -> str:
-    """
-    Implementation of the Read tool.
-    Reads a UTF-8 text file and returns its content.
-    """
+    """Read a UTF-8 text file and return its contents."""
     with open(file_path, "r", encoding="utf-8") as f:
         return f.read()
 
 
 def tool_write(file_path: str, content: str) -> str:
-    """
-    Implementation of the Write tool.
-    Creates the file if it doesn't exist, overwrites it if it does.
-    Returns a short confirmation string (tool output).
-    """
-    # Ensure parent directories exist if the model writes into nested paths.
+    """Create/overwrite a UTF-8 text file with provided content."""
     parent = os.path.dirname(file_path)
     if parent:
         os.makedirs(parent, exist_ok=True)
@@ -76,8 +73,42 @@ def tool_write(file_path: str, content: str) -> str:
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(content)
 
-    # The tool output can be anything; keep it simple and deterministic.
     return f"Wrote {len(content)} chars to {file_path}"
+
+
+def tool_bash(command: str) -> str:
+    """
+    Execute a shell command in the CURRENT working directory (important for tests).
+    Capture stdout and stderr and return them to the model.
+    """
+    try:
+        completed = subprocess.run(
+            command,
+            shell=True,              # command is a string, run via shell
+            capture_output=True,     # capture stdout/stderr
+            text=True,               # decode to string
+            cwd=os.getcwd(),         # ensure we run where the program is executed
+        )
+    except Exception as e:
+        return f"ERROR: failed to run command: {e}"
+
+    # Return both stdout and stderr so the model can reason about failures.
+    stdout = completed.stdout or ""
+    stderr = completed.stderr or ""
+
+    if completed.returncode != 0:
+        return f"ERROR (code {completed.returncode})\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+
+    # Successful commands often return empty output (e.g., rm file).
+    # Still return both streams for completeness.
+    combined = ""
+    if stdout:
+        combined += stdout
+    if stderr:
+        # Some commands output warnings on stderr even when successful.
+        combined += ("" if combined.endswith("\n") or combined == "" else "\n") + stderr
+
+    return combined
 
 
 def run_agent_loop(client: OpenAI, model: str, user_prompt: str) -> str:
@@ -111,10 +142,7 @@ def run_agent_loop(client: OpenAI, model: str, user_prompt: str) -> str:
                 {
                     "id": tc.id,
                     "type": tc.type,
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments,
-                    },
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
                 }
                 for tc in tool_calls
             ]
@@ -138,16 +166,7 @@ def run_agent_loop(client: OpenAI, model: str, user_prompt: str) -> str:
                 file_path = args_obj.get("file_path")
                 if not file_path:
                     raise RuntimeError("Missing required argument: file_path")
-
                 output = tool_read(file_path)
-
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": output,
-                    }
-                )
 
             elif fn_name == "Write":
                 file_path = args_obj.get("file_path")
@@ -156,19 +175,24 @@ def run_agent_loop(client: OpenAI, model: str, user_prompt: str) -> str:
                     raise RuntimeError("Missing required argument: file_path")
                 if content is None:
                     raise RuntimeError("Missing required argument: content")
-
                 output = tool_write(file_path, content)
 
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": output,
-                    }
-                )
+            elif fn_name == "Bash":
+                command = args_obj.get("command")
+                if not command:
+                    raise RuntimeError("Missing required argument: command")
+                output = tool_bash(command)
 
             else:
                 raise RuntimeError(f"Unsupported tool: {fn_name}")
+
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": output,
+                }
+            )
 
 
 def main():
@@ -187,7 +211,7 @@ def main():
         user_prompt=args.p,
     )
 
-    # Print ONLY final answer to stdout.
+    # Print ONLY final answer to stdout (tests usually compare stdout exactly).
     sys.stdout.write(final_text)
 
 
