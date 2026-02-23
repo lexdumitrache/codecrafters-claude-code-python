@@ -1,9 +1,6 @@
-[![progress-banner](https://backend.codecrafters.io/progress/claude-code/d3d3965a-90d4-4ef3-b6fd-0e770d78abbe)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
-
 # Claude Code — LLM-Powered Coding Assistant (Python)
 
-This repository contains **my implementation of a simplified “Claude Code”**, an AI-powered coding assistant built from scratch in Python as part of the  
-[Build Your Own Claude Code challenge by CodeCrafters](https://codecrafters.io/challenges/claude-code).
+This repository contains **my implementation of a simplified “Claude Code”**, an AI-powered coding assistant built from scratch in Python as part of the [Build Your Own Claude Code challenge by CodeCrafters](https://codecrafters.io/challenges/claude-code).
 
 The project focuses on designing a **tool-calling LLM agent** capable of reasoning, executing actions, and completing multi-step tasks through an agent loop.
 
